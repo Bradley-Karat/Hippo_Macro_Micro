@@ -1,0 +1,15 @@
+in_dir: '/project/6050199/ext-data/hcp1200/HCP_1200_T1w_Diffusion_FS'
+
+container: '/project/6050199/akhanf/singularity/bids-apps/khanlab_mdt-bids_v0.1.sif'
+#container: '/project/6050199/akhanf/singularity/bids-apps/khanlab_mdt_v0.20.3.img'
+
+participants_tsv: participants.tsv
+
+
+#paths to inputs, relative to in_dir
+bvec: '{subject}/T1w/Diffusion/bvecs'
+bval: '{subject}/T1w/Diffusion/bvals'
+dwi: '{subject}/T1w/Diffusion/data.nii.gz'
+grad_dev: '{subject}/T1w/Diffusion/grad_dev.nii.gz'
+brain_mask: '{subject}/T1w/Diffusion/nodif_brain_mask.nii.gz'
+

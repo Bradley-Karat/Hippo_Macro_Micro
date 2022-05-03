@@ -1,0 +1,50 @@
+from os.path import join
+from glob import glob
+import pandas as pd
+
+configfile: '../config/config.yml'
+
+container: config['container']
+
+model = 'NODDI'
+
+#load participants.tsv file
+df = pd.read_table('../config/participants.tsv')
+subjects = df.participant_id.to_list()
+
+hemi = ['L','R']
+
+rule all:
+    input:
+        final = expand('/scratch/bkarat/hcpUR100_hippunfold/results/sub-{subject}/Diffusion/MDT_{model}/hemi-{hemi}', subject=subjects, model=model,hemi=hemi)
+
+
+rule create_protocol: #If you have delta, TR, and TE specify it here using: --Delta [], --delta [], --TE [], --TR [] at the shell command below
+   input:
+        bvec = join(config['in_dir'],config['bvec']),
+        bval = join(config['in_dir'],config['bval'])
+   output:
+        protocol = '/scratch/bkarat/hcpUR100_hippunfold/results/sub-{subject}/Diffusion/sub-{subject}.prtcl'
+   resources:
+        time = 10,
+     	mem_mb = 500
+   shell: 'mdt-create-protocol -o {output} {input.bvec} {input.bval} --Delta 21.8e-3 --delta 12.9e-3 --TR 8800e-3 --TE 57e-3 '
+
+
+rule fit_model:
+    input:
+        data = join(config['in_dir'],config['dwi']),
+        protocol = '/scratch/bkarat/hcpUR100_hippunfold/results/sub-{subject}/Diffusion/sub-{subject}.prtcl',
+	    brainmask = join(config['in_dir'],config['brain_mask']),
+        gradientdeviations = join(config['in_dir'],config['grad_dev'])
+    output:
+        final = directory('/scratch/bkarat/hcpUR100_hippunfold/results/sub-{subject}/Diffusion/MDT_{model}/hemi-{hemi}')
+    threads: 20
+    resources:
+        time = 120,
+     	mem_mb = 35000,
+     	cpus = 16
+    shell: 'mdt-model-fit -o {output} {model} {input.data} {input.protocol} {input.brainmask} --gradient-deviations {input.gradientdeviations}'
+
+
+
