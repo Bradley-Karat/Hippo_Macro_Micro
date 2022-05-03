@@ -1,0 +1,835 @@
+addpath('/home/ROBARTS/bkarat/graham/projects/ctb-akhanf/bkarat/2021/HippoDiffusion-master')
+addpath('/home/ROBARTS/bkarat/graham/projects/ctb-akhanf/bkarat/2021/HippoDiffusion-master/Inpaint_nans')
+addpath('/home/ROBARTS/bkarat/graham/projects/ctb-akhanf/bkarat/2021/HippoDiffusion-master/gifti-master')
+addpath('/home/ROBARTS/bkarat/graham/projects/ctb-akhanf/bkarat/2021/HippoDiffusion-master/brainparts-master')
+
+
+surface = 'midthickness';
+metric = {'ODI','NDI','T1wdivT2w','FA','MD','gyrification','thickness','curvature','AP_cos_similarity','PD_cos_similarity','IO_cos_similarity',};
+method = {'ribbon','ribbon','ribbon','ribbon','ribbon'};
+space = {'T1w','T1w','T1w','T1w','T1w','T1w','T1w','T1w','corobl','corobl','corobl'};
+hemi = 'L';
+
+subject = load('/home/ROBARTS/bkarat/graham/scratch/hcpUR100_hippunfold/participants_NMF.txt');
+subject = string(subject);
+
+%This loop creates full data matrix of 2004x100x11
+
+for ii = 1:11 %loop over metrics
+    for jj = 1:100 %loop over participants
+        
+        if ii <= 5
+            
+            filename = sprintf('/home/ROBARTS/bkarat/graham/scratch/hcpUR100_hippunfold/results/sub-%s/surf_T2w/sub-%s_hemi-%s_space-%s_den-2k_%s_%s_%s.shape.gii',subject(jj),subject(jj),hemi,space{ii},surface,method{ii},metric{ii});
+            holddata = gifti(filename);
+            combdata(:,jj,ii) = holddata.cdata;
+            
+        elseif ii > 5 & ii <= 8 
+            
+            filename = sprintf('/home/ROBARTS/bkarat/graham/scratch/hcpUR100_hippunfold/results/sub-%s/surf_T2w/sub-%s_hemi-%s_space-%s_den-2k_%s.shape.gii',subject(jj),subject(jj),hemi,space{ii},metric{ii});
+            holddata = gifti(filename);
+            combdata(:,jj,ii) = holddata.cdata;
+            
+        else
+            
+            filename = sprintf('/home/ROBARTS/bkarat/graham/scratch/hcpUR100_hippunfold/results/sub-%s/surf_T2w/sub-%s_hemi-%s_space-%s_den-2k_%s_%s.shape.gii',subject(jj),subject(jj),hemi,space{ii},surface,metric{ii});
+            holddata = gifti(filename);        
+            combdata(:,jj,ii) = holddata.cdata;
+        end
+    end
+end
+   
+%Normalize metrics
+for ii =1:11
+    hold = double(combdata(:,:,ii));
+    if ii == 8
+        hold = abs(hold(:,:)); %taking absolute value of curvature
+    elseif ii >= 9 %Make sure no cosine similarities are negative
+        hold = abs(hold);
+    end
+    zscorecombdata(:,ii) = zscore(hold(:)); %take within-metric z-score
+end
+
+%shift all z-scored metrics by the minimum z-score across all metrics
+for ii =1:11
+    nonegzscorecomb(:,ii) = zscorecombdata(:,ii) + abs(min(zscorecombdata(:))); 
+end
+
+
+%% All metric analysis
+
+%putting in correct format for NMF (vertices x subject-metrics)
+Xfull = double(reshape(nonegzscorecomb,[2004,1100])); %all metrics
+
+%Plot reconstruction error for following range of components on Xfull
+comp = [2,3,4,5,6,7,8,9,10,11,12];
+
+for ii = 1:11
+    
+    ii %print for iteration
+    [Wfull ,Hfull] = opnmf_mem(Xfull, comp(ii), [],'NNDSVD',100000,0.00001,[],false,'/home/ROBARTS/bkarat/graham/scratch/hcpUR100_hippunfold/NMF')
+    reconfull = Wfull * Hfull; %reconstruction of input matrix
+    recondifffull = Xfull - reconfull; %error in reconstruction
+    errorfull(ii) = norm(recondifffull,'fro'); %frobenius norm of error
+   
+end
+
+%calculating gradient in reconstruction error
+for ii = 1:10
+    step = errorfull(ii+1);
+    graderrorfull(ii+1) = step - errorfull(ii);
+end
+
+graderrorfull(1) = nan;
+
+%plot gradient in reconstruction error
+scatter(comp,graderrorfull)
+hold on
+plot(comp,graderrorfull)
+
+%Stability analysis for Xfull
+%Randomly split data 6 times
+for kk = 1:6
+    randsub = randsample(100,100); %100 random numbers between 1-100
+    subA = randsub(1:50);
+    subB = randsub(51:100); 
+
+%get metrics for both splits of data
+    for ii = 1:11
+    
+        if ii == 1
+            XfullA(:,1:50) = Xfull(:,subA);
+            XfullB(:,1:50) = Xfull(:,subB);
+        else
+            ind1 = ii*50;
+            ind2 = (ii*100) - 100;
+            XfullA(:,ind1-49:ind1) = Xfull(:,subA+ind2);
+            XfullB(:,ind1-49:ind1) = Xfull(:,subB+ind2);
+        end
+    end
+
+    for jj = 1:11 %cycle through 11 different components
+    
+        [WfullA ,HfullA] = opnmf_mem(XfullA, comp(jj), [],'NNDSVD',100000,0.00001,[],false,'/home/ROBARTS/bkarat/graham/scratch/hcpUR100_hippunfold/NMF')
+        [WfullB ,HfullB] = opnmf_mem(XfullB, comp(jj), [],'NNDSVD',100000,0.00001,[],false,'/home/ROBARTS/bkarat/graham/scratch/hcpUR100_hippunfold/NMF')
+
+        WfullAnorm = zeros(size(WfullA));
+        WfullBnorm = zeros(size(WfullB));
+    
+        %normalize each component vector
+        for ii = 1:2004
+            normA = norm(WfullA(ii,:));
+            normB = norm(WfullB(ii,:));
+            WfullAnorm(ii,:) = WfullA(ii,:) / normA;
+            WfullBnorm(ii,:) = WfullB(ii,:) / normB;
+        end
+
+    %cossim calculation is (a*b)/(|a|*|b|), normalized above so denominator is
+    %equal to 1
+        WAcossim = WfullAnorm * WfullAnorm'; %each row contains the cosine similarity of component scores between a given vertex and all other vertices.
+        WBcossim = WfullBnorm * WfullBnorm';
+    
+    %correlation coefficient between corresponding rows to see if the NMF decomp groups a given vertex with the same subset of vertices in each split of data. 
+        for ii = 1:2004
+            r = corrcoef(WAcossim(ii,:),WBcossim(ii,:));
+            rhold(ii) = r(1,2);
+        end
+
+        corrcoefcomp(jj,kk) = mean(rhold); %take mean across all vertices    
+        stdcorrcoef(jj,kk) = std(rhold);
+    end
+end
+
+%mean corrcoef and std across all 6 different splits
+for ii = 1:11
+    meancorrcoef(ii) = mean(corrcoefcomp(ii,:));
+    meanstd(ii) = mean(stdcorrcoef(ii,:));
+end
+
+%plot stability mean with std
+yneg =  meanstd;
+for ii = 1:11
+    if (meancorrcoef(ii) + meanstd(ii)) > 1
+        ypos(ii) = 0.999999999 - meancorrcoef(ii);
+    else
+        ypos(ii) = meanstd(ii);
+    end
+end
+
+e = errorbar(comp,meancorrcoef,yneg,ypos)
+
+%Seems 6 components is highest component which gives best gradient in error and stability
+[Wfull ,Hfull] = opnmf_mem(Xfull, 6, [],'NNDSVD',100000,0.00001,[],false,'/home/ROBARTS/bkarat/graham/scratch/hcpUR100_hippunfold/NMF')
+
+%winner-take-all method at each vertex
+for ii = 1:2004
+    vertex = Wfull(ii,:);
+    [val,ind] = max(vertex);
+    WTAcompvertex(ii) = ind; 
+end
+
+img = WTAcompvertex';  %this can be fed into plot_2k_flatmap.m
+
+%calculate the z-scored subject-metric matrix
+Hfullz = zscore(Hfull(:));
+Hfullz = reshape(Hfullz,[6,1100]);
+
+
+%% No cosine similarity input matrix
+
+%putting in correct format for NMF (vertices x subject-metrics)
+Xnocos = Xfull(:,1:800);
+
+%Stability analysis for Xnocos
+%Randomly split data 6 times
+for kk = 1:6
+    randsub = randsample(100,100); %100 random numbers between 1-100
+    subA = randsub(1:50);
+    subB = randsub(51:100); 
+
+%get metrics for both splits
+    for ii = 1:8
+    
+        if ii == 1
+            XnocosA(:,1:50) = Xnocos(:,subA);
+            XnocosB(:,1:50) = Xnocos(:,subB);
+        else
+            ind1 = ii*50;
+            ind2 = (ii*100) - 100;
+            XnocosA(:,ind1-49:ind1) = Xnocos(:,subA+ind2);
+            XnocosB(:,ind1-49:ind1) = Xnocos(:,subB+ind2);
+        end
+    end
+
+    for jj = 1:11 %cycle through 11 components
+    
+        [WnocosA ,HnocosA] = opnmf_mem(XnocosA, comp(jj), [],'NNDSVD',100000,0.00001,[],false,'/home/ROBARTS/bkarat/graham/scratch/hcpUR100_hippunfold/NMF')
+        [WnocosB ,HnocosB] = opnmf_mem(XnocosB, comp(jj), [],'NNDSVD',100000,0.00001,[],false,'/home/ROBARTS/bkarat/graham/scratch/hcpUR100_hippunfold/NMF')
+
+        WnocosAnorm = zeros(size(WnocosA));
+        WnocosBnorm = zeros(size(WnocosB));
+    
+        for ii = 1:2004
+            normA = norm(WnocosA(ii,:));
+            normB = norm(WnocosB(ii,:));
+            WnocosAnorm(ii,:) = WnocosA(ii,:) / normA;
+            WnocosBnorm(ii,:) = WnocosB(ii,:) / normB;
+        end
+
+    %cossim calculation is (a*b)/(|a|*|b|), normalized above so denominator is
+    %equal to 1
+        WAcossim = WnocosAnorm * WnocosAnorm'; %each row contains the cosine similarity of component scores between a given vertex and all other vertices.
+        WBcossim = WnocosBnorm * WnocosBnorm';
+    
+    %correlation coefficient between corresponding rows to see if the NMF decomp groups a given vertex with the same subset of vertices in each split of data. 
+        for ii = 1:2004
+            r = corrcoef(WAcossim(ii,:),WBcossim(ii,:));
+            rhold(ii) = r(1,2);
+        end
+
+        corrcoefcomp(jj,kk) = mean(rhold);    
+        stdcorrcoef(jj,kk) = std(rhold);
+    end
+end
+
+ 
+%mean corrcoef and std across all 6 different splits
+for ii = 1:11
+    meancorrcoef(ii) = mean(corrcoefcomp(ii,:));
+    meanstd(ii) = mean(stdcorrcoef(ii,:));
+end
+
+%plot stability  
+scatter(comp,corrcoefcomp)
+hold on
+plot(comp,corrcoefcomp)
+
+%plot stability mean with std
+yneg =  meanstd;
+for ii = 1:11
+    if (meancorrcoef(ii) + meanstd(ii)) > 1
+        ypos(ii) = 0.999999999 - meancorrcoef(ii);
+    else
+        ypos(ii) = meanstd(ii);
+    end
+end
+
+e = errorbar(comp,meancorrcoef,yneg,ypos)
+
+%seems 4 components gives best delta in error
+[Wnocos ,Hnocos] = opnmf_mem(Xnocos, 4, [],'NNDSVD',100000,0.00001,[],false,'/home/ROBARTS/bkarat/graham/scratch/hcpUR100_hippunfold/NMF')
+
+for ii = 1:2004
+    vertex = Wnocos(ii,:);
+    [val,ind] = max(vertex);
+    WTAcompvertex(ii) = ind; 
+end
+
+img = WTAcompvertex';  
+
+Hnocosz = zscore(Hnocos(:));
+Hnocosz = reshape(Hnocosz,[4,800]);
+
+%% X3 (ODI, NDI, myelin)
+
+X3 = Xfull(:,1:300);
+
+%Plot reconstruction error for range of components on X3
+comp = [2,3,4,5,6,7,8,9,10,11,12];
+
+for ii = 1:11
+    
+    ii
+    [W3 ,H3] = opnmf_mem(X3, comp(ii), [],'NNDSVD',100000,0.00001,[],false,'/home/ROBARTS/bkarat/graham/scratch/hcpUR100_hippunfold/NMF')
+    recon3 = W3 * H3;
+    recondiff3 = X3 - recon3;
+    error3(ii) = norm(recondiff3,'fro');
+   
+end
+
+%calculating change in reconstruction error
+for ii = 1:10
+    step = error3(ii+1);
+    graderror3(ii+1) = step - error3(ii);
+end
+
+graderror3(1) = nan;
+
+scatter(comp,graderror3)
+hold on
+plot(comp,graderror3)
+
+[W3 ,H3] = opnmf_mem(X3, 4, [],'NNDSVD',100000,0.00001,[],false,'/home/ROBARTS/bkarat/graham/scratch/hcpUR100_hippunfold/NMF')
+
+for ii = 1:2004
+    vertex = W3(ii,:);
+    [val,ind] = max(vertex);
+    WTAcompvertex(ii) = ind; 
+end
+
+img = WTAcompvertex';  
+
+H3z = zscore(H3(:));
+H3z = reshape(H3z,[4,300]);
+
+%Stability analysis for X3
+%Randomly split data 6 times
+for kk = 1:6
+    randsub = randsample(100,100); %100 random numbers between 1-100
+    subA = randsub(1:50);
+    subB = randsub(51:100); 
+
+%get metrics for both splits
+    for ii = 1:3
+    
+        if ii == 1
+            X3A(:,1:50) = X3(:,subA);
+            X3B(:,1:50) = X3(:,subB);
+        else
+            ind1 = ii*50;
+            ind2 = (ii*100) - 100;
+            X3A(:,ind1-49:ind1) = X3(:,subA+ind2);
+            X3B(:,ind1-49:ind1) = X3(:,subB+ind2);
+        end
+    end
+
+    for jj = 1:11 %cycle through 11 components
+    
+        [W3A ,H3A] = opnmf_mem(X3A, comp(jj), [],'NNDSVD',100000,0.00001,[],false,'/home/ROBARTS/bkarat/graham/scratch/hcpUR100_hippunfold/NMF')
+        [W3B ,H3B] = opnmf_mem(X3B, comp(jj), [],'NNDSVD',100000,0.00001,[],false,'/home/ROBARTS/bkarat/graham/scratch/hcpUR100_hippunfold/NMF')
+
+        W3Anorm = zeros(size(W3A));
+        W3Bnorm = zeros(size(W3B));
+    
+        for ii = 1:2004
+            normA = norm(W3A(ii,:));
+            normB = norm(W3B(ii,:));
+            W3Anorm(ii,:) = W3A(ii,:) / normA;
+            W3Bnorm(ii,:) = W3B(ii,:) / normB;
+        end
+
+    %cossim calculation is (a*b)/(|a|*|b|), normalized above so denominator is
+    %equal to 1
+        WAcossim = W3Anorm * W3Anorm'; %each row contains the cosine similarity of component scores between a given vertex and all other vertices.
+        WBcossim = W3Bnorm * W3Bnorm';
+    
+    %correlation coefficient between corresponding rows to see if the NMF decomp groups a given vertex with the same subset of vertices in each split of data. 
+        for ii = 1:2004
+            r = corrcoef(WAcossim(ii,:),WBcossim(ii,:));
+            rhold(ii) = r(1,2);
+        end
+
+        corrcoefcomp(jj,kk) = mean(rhold);    
+        stdcorrcoef(jj,kk) = std(rhold);
+    end
+end
+
+ 
+%mean corrcoef and std across all 6 different splits
+for ii = 1:11
+    meancorrcoef(ii) = mean(corrcoefcomp(ii,:));
+    meanstd(ii) = mean(stdcorrcoef(ii,:));
+end
+
+%plot stability  
+scatter(comp,corrcoefcomp)
+hold on
+plot(comp,corrcoefcomp)
+
+%plot stability mean with std
+yneg =  meanstd;
+for ii = 1:11
+    if (meancorrcoef(ii) + meanstd(ii)) > 1
+        ypos(ii) = 0.999999999 - meancorrcoef(ii);
+    else
+        ypos(ii) = meanstd(ii);
+    end
+end
+
+e = errorbar(comp,meancorrcoef,yneg,ypos)
+
+
+
+
+
+%% Xcossim (AP, PD, IO)
+
+Xcs = Xfull(:,801:1100);
+
+%Plot reconstruction error for range of components on X3
+comp = [2,3,4,5,6,7,8,9,10,11,12];
+
+for ii = 1:11
+    
+    ii
+    [Wcs ,Hcs] = opnmf_mem(Xcs, comp(ii), [],'NNDSVD',100000,0.00001,[],false,'/home/ROBARTS/bkarat/graham/scratch/hcpUR100_hippunfold/NMF')
+    reconcs = Wcs * Hcs;
+    recondiffcs = Xcs - reconcs;
+    errorcs(ii) = norm(recondiffcs,'fro');
+   
+end
+
+%calculating change in reconstruction error
+for ii = 1:10
+    step = errorcs(ii+1);
+    graderrorcs(ii+1) = step - errorcs(ii);
+end
+
+graderrorcs(1) = nan;
+
+scatter(comp,graderrorcs)
+hold on
+plot(comp,graderrorcs)
+
+[Wcs ,Hcs] = opnmf_mem(Xcs, 4, [],'NNDSVD',100000,0.00001,[],false,'/home/ROBARTS/bkarat/graham/scratch/hcpUR100_hippunfold/NMF')
+
+for ii = 1:2004
+    vertex = Wcs(ii,:);
+    [val,ind] = max(vertex);
+    WTAcompvertex(ii) = ind; 
+end
+
+img = WTAcompvertex';  
+
+Hcsz = zscore(Hcs(:));
+Hcsz = reshape(Hcsz,[4,300]);
+
+
+%Stability analysis for Xcs
+%Randomly split data 6 times
+for kk = 1:6
+    randsub = randsample(100,100); %100 random numbers between 1-100
+    subA = randsub(1:50);
+    subB = randsub(51:100); 
+
+%get metrics for both splits
+    for ii = 1:3
+    
+        if ii == 1
+            XcsA(:,1:50) = Xcs(:,subA);
+            XcsB(:,1:50) = Xcs(:,subB);
+        else
+            ind1 = ii*50;
+            ind2 = (ii*100) - 100;
+            XcsA(:,ind1-49:ind1) = Xcs(:,subA+ind2);
+            XcsB(:,ind1-49:ind1) = Xcs(:,subB+ind2);
+        end
+    end
+
+    for jj = 1:11 %cycle through 11 components
+    
+        [WcsA ,HcsA] = opnmf_mem(XcsA, comp(jj), [],'NNDSVD',100000,0.00001,[],false,'/home/ROBARTS/bkarat/graham/scratch/hcpUR100_hippunfold/NMF')
+        [WcsB ,HcsB] = opnmf_mem(XcsB, comp(jj), [],'NNDSVD',100000,0.00001,[],false,'/home/ROBARTS/bkarat/graham/scratch/hcpUR100_hippunfold/NMF')
+
+        WcsAnorm = zeros(size(WcsA));
+        WcsBnorm = zeros(size(WcsB));
+    
+        for ii = 1:2004
+            normA = norm(WcsA(ii,:));
+            normB = norm(WcsB(ii,:));
+            WcsAnorm(ii,:) = WcsA(ii,:) / normA;
+            WcsBnorm(ii,:) = WcsB(ii,:) / normB;
+        end
+
+    %cossim calculation is (a*b)/(|a|*|b|), normalized above so denominator is
+    %equal to 1
+        WAcossim = WcsAnorm * WcsAnorm'; %each row contains the cosine similarity of component scores between a given vertex and all other vertices.
+        WBcossim = WcsBnorm * WcsBnorm';
+    
+    %correlation coefficient between corresponding rows to see if the NMF decomp groups a given vertex with the same subset of vertices in each split of data. 
+        for ii = 1:2004
+            r = corrcoef(WAcossim(ii,:),WBcossim(ii,:));
+            rhold(ii) = r(1,2);
+        end
+
+        corrcoefcomp(jj,kk) = mean(rhold);    
+        stdcorrcoef(jj,kk) = std(rhold);
+    end
+end
+
+ 
+%mean corrcoef and std across all 6 different splits
+for ii = 1:11
+    meancorrcoef(ii) = mean(corrcoefcomp(ii,:));
+    meanstd(ii) = mean(stdcorrcoef(ii,:));
+end
+
+%plot stability  
+scatter(comp,corrcoefcomp)
+hold on
+plot(comp,corrcoefcomp)
+
+%plot stability mean with std
+yneg =  meanstd;
+for ii = 1:11
+    if (meancorrcoef(ii) + meanstd(ii)) > 1
+        ypos(ii) = 0.999999999 - meancorrcoef(ii);
+    else
+        ypos(ii) = meanstd(ii);
+    end
+end
+
+e = errorbar(comp,meancorrcoef,yneg,ypos)
+
+
+
+
+
+%% X3dti (myelin,FA,MD)
+
+X3dti = Xfull(:,201:500);
+
+%Plot reconstruction error for range of components on X3
+comp = [2,3,4,5,6,7,8,9,10,11,12];
+
+for ii = 1:11
+    
+    ii
+    [W3dti ,H3dti] = opnmf_mem(X3dti, comp(ii), [],'NNDSVD',100000,0.00001,[],false,'/home/ROBARTS/bkarat/graham/scratch/hcpUR100_hippunfold/NMF')
+    recon3dti = W3dti * H3dti;
+    recondiff3dti = X3dti - recon3dti;
+    error3dti(ii) = norm(recondiff3dti,'fro');
+   
+end
+
+%calculating change in reconstruction error
+for ii = 1:10
+    step = error3dti(ii+1);
+    graderror3dti(ii+1) = step - error3dti(ii);
+end
+
+graderror3dti(1) = nan;
+
+scatter(comp,graderror3dti)
+hold on
+plot(comp,graderror3dti)
+
+
+[W3dti ,H3dti] = opnmf_mem(X3dti, 4, [],'NNDSVD',100000,0.00001,[],false,'/home/ROBARTS/bkarat/graham/scratch/hcpUR100_hippunfold/NMF')
+
+for ii = 1:2004
+    vertex = W3dti(ii,:);
+    [val,ind] = max(vertex);
+    WTAcompvertex(ii) = ind; 
+end
+
+img = WTAcompvertex'; 
+
+H3dtiz = zscore(H3dti(:));
+H3dtiz = reshape(H3dtiz,[4,300]);
+
+
+%Stability analysis for X3dti
+%Randomly split data 6 times
+for kk = 1:6
+    randsub = randsample(100,100); %100 random numbers between 1-100
+    subA = randsub(1:50);
+    subB = randsub(51:100); 
+
+%get metrics for both splits
+    for ii = 1:3
+    
+        if ii == 1
+            X3dtiA(:,1:50) = X3dti(:,subA);
+            X3dtiB(:,1:50) = X3dti(:,subB);
+        else
+            ind1 = ii*50;
+            ind2 = (ii*100) - 100;
+            X3dtiA(:,ind1-49:ind1) = X3dti(:,subA+ind2);
+            X3dtiB(:,ind1-49:ind1) = X3dti(:,subB+ind2);
+        end
+    end
+
+    for jj = 1:11 %cycle through 11 components
+    
+        [W3dtiA ,H3dtiA] = opnmf_mem(X3dtiA, comp(jj), [],'NNDSVD',100000,0.00001,[],false,'/home/ROBARTS/bkarat/graham/scratch/hcpUR100_hippunfold/NMF')
+        [W3dtiB ,H3dtiB] = opnmf_mem(X3dtiB, comp(jj), [],'NNDSVD',100000,0.00001,[],false,'/home/ROBARTS/bkarat/graham/scratch/hcpUR100_hippunfold/NMF')
+
+        W3dtiAnorm = zeros(size(W3dtiA));
+        W3dtiBnorm = zeros(size(W3dtiB));
+    
+        for ii = 1:2004
+            normA = norm(W3dtiA(ii,:));
+            normB = norm(W3dtiB(ii,:));
+            W3dtiAnorm(ii,:) = W3dtiA(ii,:) / normA;
+            W3dtiBnorm(ii,:) = W3dtiB(ii,:) / normB;
+        end
+
+    %cossim calculation is (a*b)/(|a|*|b|), normalized above so denominator is
+    %equal to 1
+        WAcossim = W3dtiAnorm * W3dtiAnorm'; %each row contains the cosine similarity of component scores between a given vertex and all other vertices.
+        WBcossim = W3dtiBnorm * W3dtiBnorm';
+    
+    %correlation coefficient between corresponding rows to see if the NMF decomp groups a given vertex with the same subset of vertices in each split of data. 
+        for ii = 1:2004
+            r = corrcoef(WAcossim(ii,:),WBcossim(ii,:));
+            rhold(ii) = r(1,2);
+        end
+
+        corrcoefcomp(jj,kk) = mean(rhold);    
+        stdcorrcoef(jj,kk) = std(rhold);
+    end
+end
+
+ 
+%mean corrcoef and std across all 6 different splits
+for ii = 1:11
+    meancorrcoef(ii) = mean(corrcoefcomp(ii,:));
+    meanstd(ii) = mean(stdcorrcoef(ii,:));
+end
+
+%plot stability  
+scatter(comp,corrcoefcomp)
+hold on
+plot(comp,corrcoefcomp)
+
+%plot stability mean with std
+yneg =  meanstd;
+for ii = 1:11
+    if (meancorrcoef(ii) + meanstd(ii)) > 1
+        ypos(ii) = 0.999999999 - meancorrcoef(ii);
+    else
+        ypos(ii) = meanstd(ii);
+    end
+end
+
+e = errorbar(comp,meancorrcoef,yneg,ypos)
+
+%% %% Xmacro
+
+Xmacro = Xfull(:,501:800);
+
+%Plot reconstruction error for range of components on X3
+comp = [2,3,4,5,6,7,8,9,10,11,12];
+
+for ii = 1:11
+    
+    ii
+    [Wmacro ,Hmacro] = opnmf_mem(Xmacro, comp(ii), [],'NNDSVD',100000,0.00001,[],false,'/home/ROBARTS/bkarat/graham/scratch/hcpUR100_hippunfold/NMF')
+    reconmacro = Wmacro * Hmacro;
+    recondiffmacro = Xmacro - reconmacro;
+    errormacro(ii) = norm(recondiffmacro,'fro');
+   
+end
+
+%calculating change in reconstruction error
+for ii = 1:10
+    step = errormacro(ii+1);
+    graderrormacro(ii+1) = step - errormacro(ii);
+end
+
+graderrormacro(1) = nan;
+
+scatter(comp,graderrormacro)
+hold on
+plot(comp,graderrormacro)
+
+
+[Wmacro ,Hmacro] = opnmf_mem(Xmacro, 4, [],'NNDSVD',100000,0.00001,[],false,'/home/ROBARTS/bkarat/graham/scratch/hcpUR100_hippunfold/NMF')
+
+for ii = 1:2004
+    vertex = Wmacro(ii,:);
+    [val,ind] = max(vertex);
+    WTAcompvertex(ii) = ind; 
+end
+
+img = WTAcompvertex'; 
+
+Hmacroz = zscore(Hmacro(:));
+Hmacroz = reshape(Hmacroz,[4,300]);
+
+
+%Stability analysis for Xmacro
+%Randomly split data 6 times
+for kk = 1:6
+    randsub = randsample(100,100); %100 random numbers between 1-100
+    subA = randsub(1:50);
+    subB = randsub(51:100); 
+
+%get metrics for both splits
+    for ii = 1:3
+    
+        if ii == 1
+            XmacroA(:,1:50) = Xmacro(:,subA);
+            XmacroB(:,1:50) = Xmacro(:,subB);
+        else
+            ind1 = ii*50;
+            ind2 = (ii*100) - 100;
+            XmacroA(:,ind1-49:ind1) = Xmacro(:,subA+ind2);
+            XmacroB(:,ind1-49:ind1) = Xmacro(:,subB+ind2);
+        end
+    end
+
+    for jj = 1:11 %cycle through 11 components
+    
+        [WmacroA ,HmacroA] = opnmf_mem(XmacroA, comp(jj), [],'NNDSVD',100000,0.00001,[],false,'/home/ROBARTS/bkarat/graham/scratch/hcpUR100_hippunfold/NMF')
+        [WmacroB ,HmacroB] = opnmf_mem(XmacroB, comp(jj), [],'NNDSVD',100000,0.00001,[],false,'/home/ROBARTS/bkarat/graham/scratch/hcpUR100_hippunfold/NMF')
+
+        WmacroAnorm = zeros(size(WmacroA));
+        WmacroBnorm = zeros(size(WmacroB));
+    
+        for ii = 1:2004
+            normA = norm(WmacroA(ii,:));
+            normB = norm(WmacroB(ii,:));
+            WmacroAnorm(ii,:) = WmacroA(ii,:) / normA;
+            WmacroBnorm(ii,:) = WmacroB(ii,:) / normB;
+        end
+
+    %cossim calculation is (a*b)/(|a|*|b|), normalized above so denominator is
+    %equal to 1
+        WAcossim = WmacroAnorm * WmacroAnorm'; %each row contains the cosine similarity of component scores between a given vertex and all other vertices.
+        WBcossim = WmacroBnorm * WmacroBnorm';
+    
+    %correlation coefficient between corresponding rows to see if the NMF decomp groups a given vertex with the same subset of vertices in each split of data. 
+        for ii = 1:2004
+            r = corrcoef(WAcossim(ii,:),WBcossim(ii,:));
+            rhold(ii) = r(1,2);
+        end
+
+        corrcoefcomp(jj,kk) = mean(rhold);    
+        stdcorrcoef(jj,kk) = std(rhold);
+    end
+end
+
+ 
+%mean corrcoef and std across all 6 different splits
+for ii = 1:11
+    meancorrcoef(ii) = mean(corrcoefcomp(ii,:));
+    meanstd(ii) = mean(stdcorrcoef(ii,:));
+end
+
+%plot stability  
+scatter(comp,corrcoefcomp)
+hold on
+plot(comp,corrcoefcomp)
+
+%plot stability mean with std
+yneg =  meanstd;
+for ii = 1:11
+    if (meancorrcoef(ii) + meanstd(ii)) > 1
+        ypos(ii) = 0.999999999 - meancorrcoef(ii);
+    else
+        ypos(ii) = meanstd(ii);
+    end
+end
+
+e = errorbar(comp,meancorrcoef,yneg,ypos)
+
+
+%% Plotting all stability on same graph
+
+lister = {'Xfull','ODI_NDI_myelin','FA_MD_myelin','macro','cossim'};
+
+figure()
+for ii = 1:5
+    fig = openfig(sprintf('%s_stability_midthickness_L_NMF.fig',lister{ii}))
+    fig = gcf;
+    axObjs = fig.Children;
+    dataObjs = axObjs.Children;
+
+    stabilityhold(:,ii) = dataObjs.YData;
+    yneghold(:,ii) = dataObjs.YNegativeDelta;
+    yposhold(:,ii) = dataObjs.YPositiveDelta;
+    close()
+end
+
+adder = 0;
+for ii =1:5
+    adder = adder+0.15;
+    comphold(:,ii) = comp+adder;
+end
+
+labeller = {'Full','NODDI+myelin','DTI+myelin','Macrostructure','Cosine Similarities'};
+
+
+figure()
+for ii = 1:5
+    e = errorbar(comphold(:,ii),stabilityhold(:,ii),yneghold(:,ii),yposhold(:,ii),'DisplayName',labeller{ii},'LineWidth',1.5)
+    %plot(comp,stabilityhold(:,ii),'DisplayName',lister{ii})
+    legend
+    hold on
+end
+
+
+
+for ii =1:5
+    compbarerr(:,ii) = comp;
+end
+
+
+b=bar(comp,stabilityhold)
+hold on
+[ngroups,nbars] = size(stabilityhold);
+x = nan(nbars, ngroups);
+for i = 1:nbars
+    x(i,:) = b(i).XEndPoints;
+end
+% Plot the errorbars
+errorbar(x',stabilityhold,yneghold,yposhold,'k','linestyle','none','LineWidth',1.5);
+hold off
+
+
+%er = errorbar(compbarerr,stabilityhold,yneghold,yposhold);    
+%er.Color = [0 0 0];                            
+%er.LineStyle = 'none'; 
+ 
+%% Trying average map decomposition
+
+for ii=1:11
+    for jj=1:2004
+        if ii ==1
+            Xavg(jj,ii) = mean(Xfull(jj,1:100));
+        else
+            enum = ii*100;
+            enum2 = (enum-100) + 1;
+            Xavg(jj,ii) = mean(Xfull(jj,enum2:enum));
+        end
+    end
+end
+
+
+
+
+
+
+
