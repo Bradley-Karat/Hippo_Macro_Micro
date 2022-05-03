@@ -16,7 +16,7 @@ hemi = ['L','R']
 
 rule all:
     input:
-        final = expand('/scratch/bkarat/hcpUR100_hippunfold/results/sub-{subject}/Diffusion/MDT_{model}/hemi-{hemi}', subject=subjects, model=model,hemi=hemi)
+        final = expand('/scratch/bkarat/hcpUR100_hippunfold/results/sub-{subject}/Diffusion/MDT_{model}', subject=subjects, model=model)
 
 
 rule create_protocol: #If you have delta, TR, and TE specify it here using: --Delta [], --delta [], --TE [], --TR [] at the shell command below
@@ -38,7 +38,7 @@ rule fit_model:
 	    brainmask = join(config['in_dir'],config['brain_mask']),
         gradientdeviations = join(config['in_dir'],config['grad_dev'])
     output:
-        final = directory('/scratch/bkarat/hcpUR100_hippunfold/results/sub-{subject}/Diffusion/MDT_{model}/hemi-{hemi}')
+        final = directory('/scratch/bkarat/hcpUR100_hippunfold/results/sub-{subject}/Diffusion/MDT_{model}')
     threads: 20
     resources:
         time = 120,
