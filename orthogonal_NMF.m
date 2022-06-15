@@ -1,8 +1,8 @@
-addpath('/home/ROBARTS/bkarat/graham/projects/ctb-akhanf/bkarat/2021/HippoDiffusion-master')
-addpath('/home/ROBARTS/bkarat/graham/projects/ctb-akhanf/bkarat/2021/HippoDiffusion-master/Inpaint_nans')
-addpath('/home/ROBARTS/bkarat/graham/projects/ctb-akhanf/bkarat/2021/HippoDiffusion-master/gifti-master')
-addpath('/home/ROBARTS/bkarat/graham/projects/ctb-akhanf/bkarat/2021/HippoDiffusion-master/brainparts-master')
-
+pathname = ''
+addpath(sprintf('%s/HippoDiffusion-master',pathname))
+addpath(sprintf('%s/Inpaint_nans',pathname))
+addpath(sprintf('%s/gifti-master',pathname))
+addpath(sprintf('%s/brainparts-master',pathname))
 
 surface = 'midthickness';
 metric = {'ODI','NDI','T1wdivT2w','FA','MD','gyrification','thickness','curvature','AP_cos_similarity','PD_cos_similarity','IO_cos_similarity',};
