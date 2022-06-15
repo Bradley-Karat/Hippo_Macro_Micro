@@ -1,8 +1,9 @@
 %Paths to surface GIFTI files which supply vertex and face location
-addpath('/home/ROBARTS/bkarat/graham/projects/ctb-akhanf/bkarat/2021/HippoDiffusion-master/gifti-master');
-addpath('/home/ROBARTS/bkarat/graham/projects/ctb-akhanf/bkarat/2021/HippoDiffusion-master/BrewerMap-master');
-unf = gifti('/home/ROBARTS/bkarat/graham/scratch/hcpUR100_hippunfold/macro_average/tpl-avg_space-unfold_den-2k_midthickness.surf.gii');
-FV = gifti('/home/ROBARTS/bkarat/graham/scratch/hcpUR100_hippunfold/macro_average/vertices_midsurf_L_mean.surf.gii');
+pathname = ''
+addpath(sprintf('%s/gifti-master',pathname));
+addpath(sprintf('%s/BrewerMap-master',pathname));
+unf = gifti(sprintf('%s/tpl-avg_space-unfold_den-2k_midthickness.surf.gii',pathname));
+FV = gifti(sprintf('%s/vertices_midsurf_L_mean.surf.gii',pathname));
 
 %Assumes that the variable of interest to plot is called 'img' which has the same number of
 %vertices defined in the surface files
