@@ -1,3 +1,5 @@
+#Code for running OPNNMF using different combinations of metrics
+
 addpath('/home/ROBARTS/bkarat/graham/projects/ctb-akhanf/bkarat/2021/HippoDiffusion-master')
 addpath('/home/ROBARTS/bkarat/graham/projects/ctb-akhanf/bkarat/2021/HippoDiffusion-master/Inpaint_nans')
 addpath('/home/ROBARTS/bkarat/graham/projects/ctb-akhanf/bkarat/2021/HippoDiffusion-master/gifti-master')
