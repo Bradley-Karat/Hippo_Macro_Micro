@@ -25,7 +25,7 @@ def gradient_maker(E):
   
     E = newdat 
     
-    #Take derivative along each direction will considering border cases
+    #Take derivative along each direction while considering border cases
     for i in range(E.shape[0]):
         for j in range(E.shape[1]):
             for k in range(E.shape[2]):
