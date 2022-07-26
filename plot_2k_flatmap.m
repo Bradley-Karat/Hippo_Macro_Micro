@@ -31,8 +31,9 @@ FV = gifti(sprintf('%s/vertices_midsurf_L_mean.surf.gii',pathname));
     set(gca,'yColor',[1 1 1]); 
     axis equal tight;
     if discrete
-        map = brewermap(max(img),'Set1');
+        map = brewermap(round(max(img)),'Set1');
         colormap(map); 
+    end
     light;
     caxis(window);
     subplot(1,2,2);
@@ -46,8 +47,9 @@ FV = gifti(sprintf('%s/vertices_midsurf_L_mean.surf.gii',pathname));
     p.FaceColor = 'flat';
     axis equal tight;   
     if discrete
-        map = brewermap(max(img),'Set1');
+        map = brewermap(round(max(img)),'Set1');
         colormap(map);  
+    end 
     light;
     caxis(window);
     subplot(1,2,2);
