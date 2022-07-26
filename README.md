@@ -3,6 +3,7 @@
 Includes the following files:
 
 cosine_similarities.py --> Cosine similarities/inner product between microstructural vectors and hippocampus axis vectors
+
 gradient_maker.py --> Create the hippocampus axis vectors from laplace coordinates
 
 orthogonal_NMF.m --> Perform Orthogonally-projective non-negative matrix factorization using an existing MATLAB toolbox
