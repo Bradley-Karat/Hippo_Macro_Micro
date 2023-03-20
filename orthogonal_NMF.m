@@ -170,9 +170,9 @@ end
 
 img = WTAcompvertex';  %this can be fed into plot_2k_flatmap.m
 
-%calculate the z-scored subject-metric matrix
-Hfullz = zscore(Hfull(:));
-Hfullz = reshape(Hfullz,[6,1100]);
+%calculate the z-scored subject-metric matrix along each row
+Hfullz = zscore(Hfull,0,2);
+
 
 
 %% No cosine similarity input matrix
@@ -267,8 +267,8 @@ end
 
 img = WTAcompvertex';  
 
-Hnocosz = zscore(Hnocos(:));
-Hnocosz = reshape(Hnocosz,[4,800]);
+%calculate the z-scored subject-metric matrix along each row
+Hnocosz = zscore(Hnocos,0,2);
 
 %% X3 (ODI, NDI, myelin)
 
@@ -360,9 +360,8 @@ end
 
 img = WTAcompvertex';  
 
-H3z = zscore(H3(:));
-H3z = reshape(H3z,[4,300]);
-
+%calculate the z-scored subject-metric matrix along each row
+H3z = zscore(H3,0,2);
 
 %% Xcossim (AP, PD, IO)
 
@@ -454,8 +453,8 @@ end
 
 img = WTAcompvertex';  
 
-Hcsz = zscore(Hcs(:));
-Hcsz = reshape(Hcsz,[4,300]);
+%calculate the z-scored subject-metric matrix along each row
+Hcsz = zscore(Hcs,0,2);
 
 %% X3dti (myelin,FA,MD)
 
@@ -547,8 +546,8 @@ end
 
 img = WTAcompvertex'; 
 
-H3dtiz = zscore(H3dti(:));
-H3dtiz = reshape(H3dtiz,[4,300]);
+%calculate the z-scored subject-metric matrix along each row
+H3dtiz = zscore(H3dti,0,2);
 
 %% Macrostructure Only
 
@@ -640,11 +639,9 @@ end
 
 img = WTAcompvertex'; 
 
-Hmacroz = zscore(Hmacro(:));
-Hmacroz = reshape(Hmacroz,[4,300]);
+%calculate the z-scored subject-metric matrix along each row
+Hmacroz = zscore(Hmacro,0,2);
 
-
- 
 %% Trying average map decomposition
 
 for ii=1:11
