@@ -1,4 +1,6 @@
-# Code for "Investigating the in vivo Spatial Distribution of Hippocampal Microstructure and Macrostructure"
+# Code for "Mapping the macrostructure and microstructure of the in vivo human hippocampus using diffusion MRI"
+
+Karat, B. G., DeKraker, J., Hussain, U., Köhler, S., & Khan, A. R. (2023). Mapping the macrostructure and microstructure of the in vivo human hippocampus using diffusion MRI. Human Brain Mapping. https://doi.org/10.1002/hbm.26461
 
 Includes the following files:
 
